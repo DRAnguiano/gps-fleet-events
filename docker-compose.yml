@@ -1,0 +1,170 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: gps_postgres
+    environment:
+      POSTGRES_DB: gpsdb
+      POSTGRES_USER: gps
+      POSTGRES_PASSWORD: gps_pass_cambia_esto
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gps -d gpsdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:4
+    container_name: gps_adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: chatbot-rag-pdf-api:latest
+    container_name: rag_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./.env
+    environment:
+      LLAMA_INDEX_DISABLE_EVENT_LOGGING: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      OLLAMA_HOST: http://ollama:11434
+      CHROMA_TELEMETRY_ENABLED: "false"
+
+      MODEL_NAME: phi3:mini
+      EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+
+      TOP_K: "4"
+      CHUNK_SIZE: "500"
+      CHUNK_OVERLAP: "100"
+      REINDEX_CLEAN: "false"
+      INCLUDE_ERROR_DETAILS: "false"
+
+      NUM_CTX: "4096"
+      NUM_PREDICT: "1024"
+      TEMPERATURE: "0.40"
+      REPEAT_PENALTY: "1.05"
+
+      CUDA_VISIBLE_DEVICES: "0"
+
+      DATABASE_URL: postgresql://gps:gps_pass_cambia_esto@postgres:5432/gpsdb
+
+    depends_on:
+      - ollama
+      - postgres
+    volumes:
+      - chroma_data:/app/chroma_db
+      - ./data:/app/data
+    gpus: all
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag_ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "ps"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ollama_data:/root/.ollama
+    gpus: all
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    env_file:
+      - ./.env
+    environment:
+      TZ: America/Monterrey
+      WEBHOOK_URL: https://${NGROK_DOMAIN}/
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: gpsdb
+      DB_POSTGRESDB_USER: gps
+      DB_POSTGRESDB_PASSWORD: gps_pass_cambia_esto
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./shared:/files/shared
+      - ./scripts:/files/scripts
+    restart: unless-stopped
+    depends_on:
+      - api
+      - ollama
+      - postgres
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok
+    command:
+      - "http"
+      - "--log=stdout"
+      - "--authtoken"
+      - "${NGROK_AUTHTOKEN}"
+      - "--domain"
+      - "${NGROK_DOMAIN}"
+      - "http://n8n:5678"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN}
+    ports:
+      - "4040:4040"
+    restart: unless-stopped
+    depends_on:
+      - n8n
+
+  # OPCIONAL:
+  # Servicio para ejecutar el backfill de correo como contenedor aparte.
+  # Yo primero probaría manualmente antes de dejarlo fijo.
+  #
+  # mail_backfill:
+  #   image: node:20-bookworm
+  #   container_name: gps_mail_backfill
+  #   working_dir: /app
+  #   env_file:
+  #     - ./.env
+  #   environment:
+  #     TZ: America/Monterrey
+  #     PGHOST: postgres
+  #     PGPORT: 5432
+  #     PGDATABASE: gpsdb
+  #     PGUSER: gps
+  #     PGPASSWORD: gps_pass_cambia_esto
+  #     IMAP_HOST: imap.gmail.com
+  #     IMAP_PORT: 993
+  #     IMAP_SECURE: "true"
+  #     IMAP_MAILBOX: HISTORICAL
+  #     BATCH_SIZE: 20
+  #   volumes:
+  #     - ./shared:/app/shared
+  #     - ./scripts:/app/scripts
+  #     - ./package.json:/app/package.json
+  #     - ./package-lock.json:/app/package-lock.json
+  #   command: >
+  #     sh -c "npm install && node /app/scripts/backfill_gps_event.js"
+  #   depends_on:
+  #     - postgres
+  #   restart: "no"
+
+volumes:
+  chroma_data:
+  ollama_data:
+  n8n_data:
+  pgdata:

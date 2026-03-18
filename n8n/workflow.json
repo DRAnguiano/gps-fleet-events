@@ -1,0 +1,114 @@
+{
+"name": "Chatbot RAG PDF → Responder",
+"nodes": [
+{
+"parameters": {
+"path": "chat-pdf",
+"options": {}
+},
+"id": "webhook-in",
+"name": "Webhook In",
+{
+  "name": "Telegram → RAG (/ask) → Reply (clean)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "TelegramTrigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [-640, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "__RELINK__",
+          "name": "TELEGRAM_BOT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            { "name": "chat_id", "value": "={{$json[\"message\"][\"chat\"][\"id\"]}}" },
+            { "name": "chat_type", "value": "={{$json[\"message\"][\"chat\"][\"type\"]}}" },
+            { "name": "username", "value": "={{$json[\"message\"][\"from\"][\"username\"] || ''}}" },
+            { "name": "first_name", "value": "={{$json[\"message\"][\"from\"][\"first_name\"] || ''}}" },
+            { "name": "text", "value": "={{$json[\"message\"][\"text\"] || ''}}" }
+          ]
+        }
+      },
+      "id": "SetExtract",
+      "name": "Set extract",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.chat_type}}",
+              "operation": "equal",
+              "value2": "private"
+            }
+          ]
+        }
+      },
+      "id": "IfPrivate",
+      "name": "IF private",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-220, 0]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "url": "http://api:8000/ask",
+        "method": "POST",
+        "jsonParameters": true,
+        "optionsJson": "={\"bodyParametersJson\": {\"q\": \"={{$json.text}}\", \"top_k\": 4}}"
+      },
+      "id": "RagAsk",
+      "name": "RAG: Ask (/ask)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [20, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$node[\"Set extract\"].json.chat_id}}",
+        "text": "={{$json.text || 'No encontré respuesta.'}}"
+      },
+      "id": "TelegramSend",
+      "name": "Telegram: Send",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [260, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "__RELINK__",
+          "name": "TELEGRAM_BOT"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Set extract", "type": "main", "index": 0 }]]
+    },
+    "Set extract": {
+      "main": [[{ "node": "IF private", "type": "main", "index": 0 }]]
+    },
+    "IF private": {
+      "main": [
+        [{ "node": "RAG: Ask (/ask)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "RAG: Ask (/ask)": {
+      "main": [[{ "node": "Telegram: Send", "type": "main", "index": 0 }]]
+    }
+  }
+}

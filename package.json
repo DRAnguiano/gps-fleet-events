@@ -1,0 +1,16 @@
+{
+  "name": "gps-mail-backfill",
+  "version": "1.0.0",
+  "description": "Backfill historico de correos a gps_event",
+  "main": "scripts/backfill_gps_event.js",
+  "type": "commonjs",
+  "scripts": {
+    "backfill": "node scripts/backfill_gps_event.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "imapflow": "^1.0.181",
+    "mailparser": "^3.7.2",
+    "pg": "^8.13.1"
+  }
+}

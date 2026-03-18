@@ -1,0 +1,38 @@
+# Imagen base con CUDA y Python listos. Puedes usar PyTorch oficial:
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+# Alternativas:
+# FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+# (en esa deberías instalar Python + pip y luego torch con el index de PyTorch CUDA)
+
+WORKDIR /app
+
+# deps útiles
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git && rm -rf /var/lib/apt/lists/*
+
+# Copiamos requirements primero para cache
+COPY requirements.txt /app/requirements.txt
+
+# Asegura que torch ya viene con CUDA en esta imagen;
+# si prefieres re-fijarlo, usa el index de CUDA:
+# RUN pip install --upgrade pip && \
+#     pip install --index-url https://download.pytorch.org/whl/cu121 torch==2.4.0 torchvision==0.19.0
+
+RUN python -m pip install --upgrade pip \
+ && pip install -r /app/requirements.txt
+
+# código y datos
+COPY app /app/app
+COPY data /app/data
+
+# DEBUG opcional
+RUN echo "==== DEBUG indexer.py (head) ====" \
+ && sed -n '1,60p' /app/app/indexer.py \
+ && echo "==== END DEBUG ===="
+
+# carpetas de trabajo
+RUN mkdir -p /app/chroma_db /app/.cache && chmod -R 777 /app
+
+EXPOSE 8000
+CMD ["uvicorn","app.app:app","--host","0.0.0.0","--port","8000"]
