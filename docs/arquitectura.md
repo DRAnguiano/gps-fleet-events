@@ -125,6 +125,5 @@ Eso no es cosmético: si el hash del workflow no coincidiera **bit a bit** con e
 
 ## Deuda conocida
 
-- **La persona del RAG no corresponde a este dominio.** `app/persona_config.py` define un asistente de reclutamiento (heredado del proyecto de Capital Humano) y `app/app.py` enruta por palabras clave de RH. La capa de recuperación funciona, pero para el uso operativo de flota hay que reemplazar el `SYSTEM_PROMPT` y el router.
-- **El bot conversacional no consulta `gps_event`.** Hoy `/ask` responde sobre documentos PDF indexados. Las consultas de estatus de unidad se resolvieron con nodos de Postgres en n8n contra las vistas. Unificar ambos caminos —darle al LLM acceso a consultas SQL controladas— es el siguiente paso natural.
+- **El bot conversacional no consulta `gps_event`.** Hoy `/ask` responde sobre documentos PDF indexados. Las consultas de estatus de unidad se resolvieron con nodos de Postgres en n8n contra las vistas. Unificar ambos caminos —darle al LLM acceso a consultas SQL controladas— es el siguiente paso natural. Mientras tanto, el `SYSTEM_PROMPT` instruye al modelo a decir que no tiene el dato en lugar de deducirlo.
 - **El workflow de ingesta es una reconstrucción**, no el original (ver arriba). Su lógica está verificada contra el parser y probada contra Postgres, pero las versiones de nodo (`emailReadImap` v2, `postgres` v2.4, `code` v2, `if` v2) corresponden a las de n8n al momento de escribirlo: en una instancia más nueva puede requerir ajustes al importar.

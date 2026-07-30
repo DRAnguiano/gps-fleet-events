@@ -118,7 +118,7 @@ Indexar los documentos de `data/` y hacer una consulta:
 curl -X POST http://localhost:8000/reindex
 curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
-  -d '{"q":"¿Qué documentos se piden para el alta?","top_k":4}'
+  -d '{"q":"¿Cuál es el procedimiento cuando una unidad pierde señal en ruta?","top_k":4}'
 ```
 
 Servicios expuestos: API `:8000` · n8n `:5678` · Adminer `:8080` · Ollama `:11434`.

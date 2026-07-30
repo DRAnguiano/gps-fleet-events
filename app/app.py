@@ -70,29 +70,6 @@ def _public_error(exc: Exception):
     return "internal_error"
 
 # =========================================================
-# ROUTER RH
-# =========================================================
-
-RH_KEYWORDS = [
-    "trabajo",
-    "empleo",
-    "vacante",
-    "operador",
-    "licencia",
-    "postular",
-    "chofer",
-    "quinta rueda",
-]
-
-def is_rh_flow(q: str):
-    q = q.lower()
-
-    return any(
-        k in q
-        for k in RH_KEYWORDS
-    )
-
-# =========================================================
 # HEALTH
 # =========================================================
 
@@ -174,8 +151,9 @@ RAG_PROMPT = """
 
 INSTRUCCIONES:
 - Usa únicamente información textual presente en el contexto.
-- No inventes procesos.
-- No inventes políticas.
+- No inventes procesos ni políticas.
+- No inventes unidades, operadores, ubicaciones, litros, kilómetros ni horas.
+- Cuando el contexto traiga unidad y hora, inclúyelas en la respuesta.
 - Si el contexto no contiene la respuesta, dilo claramente.
 - Responde breve y profesional.
 
@@ -190,32 +168,11 @@ def ask(body: AskBody):
         question = body.q.strip()
 
         # =====================================================
-        # RH CONVERSACIONAL
-        # =====================================================
-
-        if is_rh_flow(question):
-
-            prompt = f"""
-{SYSTEM_PROMPT}
-
-MENSAJE DEL CANDIDATO:
-{question}
-
-RESPUESTA:
-"""
-
-            raw = call_llm(prompt)
-
-            final = _sanitize(raw)
-
-            return {
-                "text": final,
-                "chunks": _split_for_telegram(final),
-                "mode": "rh_flow",
-            }
-
-        # =====================================================
         # RAG DOCUMENTAL
+        #
+        # Toda consulta pasa por recuperación. No hay atajos que
+        # respondan sin contexto: un dato operativo inventado
+        # deriva en una mala asignación de viaje.
         # =====================================================
 
         ctx = retrieve_context_for_guardrail(
@@ -231,9 +188,11 @@ RESPUESTA:
             ) < 0.60
         ):
 
+            # Mismo texto que el SYSTEM_PROMPT indica al modelo:
+            # la respuesta es idéntica venga del guardarraíl o del LLM.
             msg = (
-                "Por el momento no dispongo "
-                "de esa información."
+                "No tengo ese dato disponible "
+                "en este momento."
             )
 
             final = _sanitize(msg)
