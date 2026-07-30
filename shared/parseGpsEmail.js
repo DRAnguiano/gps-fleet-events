@@ -228,7 +228,7 @@ function parseGpsEmail(input) {
     connection_minutes = parseConnectionMinutesFromSubject(subject);
   }
 
-  const hash_input = [
+   const hash_input = [
     unit_code || '',
     event_time || '',
     event_type || '',
@@ -240,8 +240,7 @@ function parseGpsEmail(input) {
     connection_event ?? '',
     connection_minutes ?? '',
     subject || '',
-    email_message_id || '',
-    imap_uid || ''
+    email_message_id || ''
   ].join('|');
 
   const source_hash = buildSourceHash(hash_input);

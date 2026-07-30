@@ -1,44 +1,109 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Header
 from fastapi.responses import JSONResponse, ORJSONResponse
 from pydantic import BaseModel
-from .indexer import build_index, get_query_engine, get_retriever, _to_int, call_llm, retrieve_context_for_guardrail
-import os, sys, time, traceback
-from fastapi import Header
-from .settings import REINDEX_API_KEY, INCLUDE_ERROR_DETAILS
 
-app = FastAPI(default_response_class=ORJSONResponse)
+from .indexer import (
+    build_index,
+    get_retriever,
+    retrieve_context_for_guardrail,
+    call_llm,
+    _to_int,
+)
 
-# ---------- Utils ----------
-def _sanitize(s: str) -> str:
+from .persona_config import SYSTEM_PROMPT
+from .settings import (
+    REINDEX_API_KEY,
+    INCLUDE_ERROR_DETAILS,
+)
+
+import os
+import sys
+import time
+import traceback
+
+app = FastAPI(
+    default_response_class=ORJSONResponse
+)
+
+# =========================================================
+# UTILS
+# =========================================================
+
+def _sanitize(s: str):
     if not s:
         return s
-    s = s.replace("\uFFFD", "")                  # rombo negro
-    return s.encode("utf-8", "ignore").decode("utf-8").strip()
 
-def _split_for_telegram(text: str, limit: int = 3500):
+    s = s.replace("\uFFFD", "")
+
+    return (
+        s.encode("utf-8", "ignore")
+        .decode("utf-8")
+        .strip()
+    )
+
+def _split_for_telegram(
+    text: str,
+    limit: int = 3500
+):
     parts = []
+
     t = text or ""
+
     while len(t) > limit:
         cut = t.rfind("\n", 0, limit)
+
         if cut <= 0:
             cut = limit
+
         parts.append(t[:cut])
         t = t[cut:]
+
     if t:
         parts.append(t)
+
     return parts
 
-def _public_error(exc: Exception) -> str:
+def _public_error(exc: Exception):
     if INCLUDE_ERROR_DETAILS:
         return f"{type(exc).__name__}: {exc}"
+
     return "internal_error"
 
-# ---------- Health ----------
+# =========================================================
+# ROUTER RH
+# =========================================================
+
+RH_KEYWORDS = [
+    "trabajo",
+    "empleo",
+    "vacante",
+    "operador",
+    "licencia",
+    "postular",
+    "chofer",
+    "quinta rueda",
+]
+
+def is_rh_flow(q: str):
+    q = q.lower()
+
+    return any(
+        k in q
+        for k in RH_KEYWORDS
+    )
+
+# =========================================================
+# HEALTH
+# =========================================================
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# ---------- Reindex ----------
+# =========================================================
+# REINDEX
+# =========================================================
+
 class ReindexBody(BaseModel):
     top_k: int | None = None
 
@@ -48,145 +113,219 @@ def reindex(
     k: int | None = Query(default=None),
     x_api_key: str | None = Header(default=None),
 ):
-    if REINDEX_API_KEY and x_api_key != REINDEX_API_KEY:
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    if (
+        REINDEX_API_KEY
+        and x_api_key != REINDEX_API_KEY
+    ):
+        return JSONResponse(
+            status_code=401,
+            content={"error": "unauthorized"}
+        )
 
-    print(">>> /reindex llamado", file=sys.stderr)
     t0 = time.time()
-    env_top_k = os.getenv("TOP_K")
-    env_chunk = os.getenv("CHUNK_SIZE")
-    env_overlap = os.getenv("CHUNK_OVERLAP")
-    print(f"ENV TOP_K={env_top_k!r} CHUNK_SIZE={env_chunk!r} CHUNK_OVERLAP={env_overlap!r}", file=sys.stderr)
 
-    top_k = _to_int(k, _to_int(getattr(body, "top_k", None), 4))
-    print(f"top_k efectivo={top_k}", file=sys.stderr)
+    top_k = _to_int(
+        k,
+        _to_int(
+            getattr(body, "top_k", None),
+            3
+        )
+    )
 
     try:
-        print(">>> build_index()...", file=sys.stderr)
         build_index()
-        print(">>> get_query_engine()...", file=sys.stderr)
-        _ = get_query_engine(top_k=top_k)
-        print(">>> OK /reindex", file=sys.stderr)
-        return {"status": "ok", "top_k": top_k, "elapsed_s": round(time.time() - t0, 2)}
+
+        return {
+            "status": "ok",
+            "top_k": top_k,
+            "elapsed_s": round(
+                time.time() - t0,
+                2
+            ),
+        }
+
     except Exception as e:
-        err = f"{type(e).__name__}: {e}"
-        print(">>> ERROR /reindex:", err, file=sys.stderr)
         traceback.print_exc()
+
         return JSONResponse(
             status_code=500,
             content={
                 "status": "error",
-                "top_k": top_k,
                 "error": _public_error(e),
-                "elapsed_s": round(time.time() - t0, 2),
             },
         )
 
-# ---------- Query (RAG con fallback LLM desactivado) ----------
-class QueryBody(BaseModel):
-    q: str
-    top_k: int | None = None
+# =========================================================
+# ASK
+# =========================================================
 
-@app.post("/query")
-def query(body: QueryBody):
-    try:
-        engine = get_query_engine(top_k=body.top_k)
-        resp = engine.query(body.q)
-        text = _sanitize(str(resp))
-        return {"answer": text, "mode": "rag_with_llm"}
-    except Exception as e:
-        try:
-            retriever = get_retriever(top_k=body.top_k)
-            nodes = retriever.retrieve(body.q)
-            snippets = []
-            for n in nodes:
-                meta = getattr(n.node, "metadata", {}) or {}
-                snippets.append({
-                    "score": getattr(n, "score", None),
-                    "text": n.node.get_content()[:600],
-                    "source": meta.get("source"),
-                    "id": n.node.node_id,
-                })
-            return {"answer": None, "mode": "retrieval_only", "reason": _public_error(e), "snippets": snippets}
-        except Exception as e2:
-            traceback.print_exc()
-            return JSONResponse(status_code=500, content={"error": _public_error(e), "fallback_error": _public_error(e2)})
-
-# ---------- Ask (RAG manual + LLM controlado, sin streaming) ----------
 class AskBody(BaseModel):
     q: str
     top_k: int | None = None
 
-from .persona_config import SYSTEM_PROMPT
-_PROMPT = SYSTEM_PROMPT + """
+RAG_PROMPT = """
 
-Contexto recuperado (puede estar vacío):
+=== CONTEXTO RECUPERADO ===
 {context}
+=== FIN DEL CONTEXTO ===
 
-Pregunta de David:
+=== MENSAJE DEL USUARIO ===
 {question}
 
-Responde siguiendo las reglas anteriores. Si el contexto no es suficiente,
-dilo explícitamente y propone los siguientes pasos realistas.
+INSTRUCCIONES:
+- Usa únicamente información textual presente en el contexto.
+- No inventes procesos.
+- No inventes políticas.
+- Si el contexto no contiene la respuesta, dilo claramente.
+- Responde breve y profesional.
 
-Respuesta:
+RESPUESTA:
 """
-
 
 @app.post("/ask")
 def ask(body: AskBody):
+
     try:
-        # Recupera contexto (no invoca LLM aún)
-        ctx = retrieve_context_for_guardrail(body.q, top_k=body.top_k)
 
-        # 🛡 Guardrail: si no hay contexto útil, no inventar
-        if not ctx or max((c["score"] or 0) for c in ctx) < 0.3:
-            msg = (
-                "No encontré contexto útil en tus documentos para esta pregunta. "
-                "Revisa si el tema está cargado en los PDFs o explícame con más detalle "
-                "qué información estás buscando."
-            )
-            final = _sanitize(msg)
-            return {"text": final, "chunks": _split_for_telegram(final)}
+        question = body.q.strip()
 
-        context_text = "\n\n---\n\n".join([c["text"] for c in ctx]) if ctx else ""
-        prompt = _PROMPT.format(
-            question=body.q.strip(),
-            context=context_text.strip(),
+        # =====================================================
+        # RH CONVERSACIONAL
+        # =====================================================
+
+        if is_rh_flow(question):
+
+            prompt = f"""
+{SYSTEM_PROMPT}
+
+MENSAJE DEL CANDIDATO:
+{question}
+
+RESPUESTA:
+"""
+
+            raw = call_llm(prompt)
+
+            final = _sanitize(raw)
+
+            return {
+                "text": final,
+                "chunks": _split_for_telegram(final),
+                "mode": "rh_flow",
+            }
+
+        # =====================================================
+        # RAG DOCUMENTAL
+        # =====================================================
+
+        ctx = retrieve_context_for_guardrail(
+            question,
+            top_k=body.top_k,
         )
 
-        # LLM NO-STREAM (complete) -> evita palabras cortadas
+        if (
+            not ctx
+            or max(
+                (c["score"] or 0)
+                for c in ctx
+            ) < 0.60
+        ):
+
+            msg = (
+                "Por el momento no dispongo "
+                "de esa información."
+            )
+
+            final = _sanitize(msg)
+
+            return {
+                "text": final,
+                "chunks": _split_for_telegram(final),
+                "mode": "fallback",
+            }
+
+        context_text = "\n\n---\n\n".join(
+            [c["text"] for c in ctx]
+        )
+
+        prompt = (
+            SYSTEM_PROMPT
+            + RAG_PROMPT.format(
+                context=context_text,
+                question=question,
+            )
+        )
+
         raw = call_llm(prompt)
+
         final = _sanitize(raw)
-        return {"text": final, "chunks": _split_for_telegram(final)}
+
+        return {
+            "text": final,
+            "chunks": _split_for_telegram(final),
+            "mode": "rag",
+        }
+
     except Exception as e:
+
         traceback.print_exc()
+
         return JSONResponse(
             status_code=500,
-            content={"error": _public_error(e)},
+            content={
+                "error": _public_error(e)
+            },
         )
 
+# =========================================================
+# SEARCH
+# =========================================================
 
-# ---------- Search (solo retrieval) ----------
 class SearchBody(BaseModel):
     q: str
     top_k: int | None = None
 
 @app.post("/search")
 def search(body: SearchBody):
+
     try:
-        retriever = get_retriever(top_k=body.top_k)
+
+        retriever = get_retriever(
+            top_k=body.top_k
+        )
+
         nodes = retriever.retrieve(body.q)
+
         out = []
+
         for n in nodes:
-            meta = getattr(n.node, "metadata", {}) or {}
+
+            meta = getattr(
+                n.node,
+                "metadata",
+                {}
+            ) or {}
+
             out.append({
-                "score": getattr(n, "score", None),
+                "score": getattr(
+                    n,
+                    "score",
+                    None
+                ),
                 "text": n.node.get_content()[:500],
                 "source": meta.get("source"),
                 "id": n.node.node_id,
             })
+
         return {"results": out}
+
     except Exception as e:
+
         traceback.print_exc()
-        return JSONResponse(status_code=500, content={"error": _public_error(e)})
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": _public_error(e)
+            },
+        )

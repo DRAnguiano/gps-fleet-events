@@ -1,15 +1,5 @@
 {
-"name": "Chatbot RAG PDF → Responder",
-"nodes": [
-{
-"parameters": {
-"path": "chat-pdf",
-"options": {}
-},
-"id": "webhook-in",
-"name": "Webhook In",
-{
-  "name": "Telegram → RAG (/ask) → Reply (clean)",
+  "name": "Telegram → RAG (/ask) → Reply",
   "nodes": [
     {
       "parameters": {},

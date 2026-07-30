@@ -1,0 +1,13 @@
+# El proyecto se edita en Windows/WSL y corre en contenedores Linux.
+# Normalizar a LF evita que los scripts .sh fallen con "bad interpreter".
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.sql  text eol=lf
+*.py   text eol=lf
+*.js   text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+*.pdf  binary

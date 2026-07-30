@@ -65,6 +65,7 @@ async function upsertGpsEvent(client, row) {
       raw_body       = EXCLUDED.raw_body,
       geofence_kind  = EXCLUDED.geofence_kind,
       data           = EXCLUDED.data
+    RETURNING id
   `;
 
   const values = [
@@ -80,13 +81,21 @@ async function upsertGpsEvent(client, row) {
     JSON.stringify(row.data || {}),
   ];
 
-  await client.query(sql, values);
+  const res = await client.query(sql, values);
+  return res.rowCount || 0;
 }
 
 async function main() {
   const db = await pool.connect();
   let lock = null;
+
   let okCount = 0;
+  let rejectCount = 0;
+  let seenMarkedCount = 0;
+  let fetchedCount = 0;
+
+  const processedUids = [];
+  const rejectedUids = [];
 
   try {
     console.log('1) Conectando a IMAP...');
@@ -99,12 +108,24 @@ async function main() {
     console.log(`4) Mailbox bloqueado: ${mailboxName}`);
 
     console.log('5) Buscando correos no leídos...');
-    const unseenUids = await imap.search({ seen: false });
+    let unseenUids = await imap.search({ seen: false });
+
+    unseenUids = (unseenUids || [])
+      .map(Number)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+
     console.log(`6) Encontrados no leídos: ${unseenUids.length}`);
 
     if (!unseenUids.length) {
       console.log(`No hay correos no leídos en ${mailboxName}.`);
-      return 0;
+      return {
+        status: 'empty',
+        okCount: 0,
+        rejectCount: 0,
+        fetchedCount: 0,
+        seenMarkedCount: 0,
+      };
     }
 
     const batchUids = unseenUids.slice(0, BATCH_SIZE);
@@ -116,9 +137,9 @@ async function main() {
       { uid: true, source: true },
       { uid: true }
     );
-    console.log(`9) Mensajes recibidos: ${messages.length}`);
 
-    const processedUids = [];
+    fetchedCount = messages.length;
+    console.log(`9) Mensajes recibidos: ${messages.length}`);
 
     for (const msg of messages) {
       try {
@@ -139,6 +160,10 @@ async function main() {
 
         console.log(`13) Evento generado UID ${msg.uid}: ${row.event_type} / ${row.unit_code || 'NULL'}`);
 
+        if (!row.event_time) {
+          throw new Error('event_time no detectado por parser');
+        }
+
         if (!row.unit_code) {
           throw new Error('unit_code no detectado por parser');
         }
@@ -148,21 +173,33 @@ async function main() {
 
         processedUids.push(msg.uid);
         okCount++;
-        console.log(`15) UID listo para marcar como leído: ${msg.uid}`);
+        console.log(`15) UID listo para marcar como leído (OK): ${msg.uid}`);
       } catch (err) {
+        rejectCount++;
+        rejectedUids.push(msg.uid);
         console.error(`Error interno UID ${msg.uid}:`, err.message);
+        console.log(`15R) UID listo para marcar como leído (REJECT): ${msg.uid}`);
       }
     }
 
-    if (processedUids.length && imap.usable) {
-      console.log(`16) Marcando como leídos ${processedUids.length} UID(s)...`);
-      await imap.messageFlagsAdd(processedUids, ['\\Seen'], { uid: true });
+    const allDoneUids = [...new Set([...processedUids, ...rejectedUids])];
+
+    if (allDoneUids.length && imap.usable) {
+      console.log(`16) Marcando como leídos ${allDoneUids.length} UID(s)...`);
+      await imap.messageFlagsAdd(allDoneUids, ['\\Seen'], { uid: true });
+      seenMarkedCount = allDoneUids.length;
       console.log('17) Marcado como leído completado.');
     } else {
       console.log('16) No hubo UIDs para marcar como leídos o la conexión no estaba usable.');
     }
 
-    return okCount;
+    return {
+      status: okCount > 0 ? 'progress' : 'no_valid_rows',
+      okCount,
+      rejectCount,
+      fetchedCount,
+      seenMarkedCount,
+    };
   } finally {
     try {
       if (lock) {
@@ -192,13 +229,18 @@ async function main() {
 }
 
 main()
-  .then((okCount) => {
-    if (!okCount || okCount === 0) {
-      console.error('Lote sin inserciones exitosas.');
+  .then((summary) => {
+    console.log('FINAL_SUMMARY=' + JSON.stringify(summary));
+
+    if (summary.status === 'progress') {
+      process.exit(0);
+    }
+
+    if (summary.status === 'empty' || summary.status === 'no_valid_rows') {
       process.exit(2);
     }
-    console.log(`Inserciones exitosas en el lote: ${okCount}`);
-    process.exit(0);
+
+    process.exit(1);
   })
   .catch((err) => {
     console.error('Fallo general:', err);

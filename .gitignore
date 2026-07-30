@@ -3,13 +3,22 @@
 __pycache__/
 *.pyc
 
-# Env
-.env
+# Node
+node_modules/
 
-# Data
+# Env (nunca versionar: contiene IMAP, Postgres, Telegram y ngrok)
+.env
+.env.local
+
+# Datos operativos y documentos internos
 data/
 chroma_db/
+backups/
 *.db
+
+# Salidas de corridas
+backfill_log.txt
+respuesta.txt
 
 # Cache
 .cache/
@@ -17,4 +26,3 @@ chroma_db/
 # OS
 .DS_Store
 Thumbs.db
-

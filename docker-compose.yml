@@ -5,11 +5,14 @@ services:
     environment:
       POSTGRES_DB: gpsdb
       POSTGRES_USER: gps
-      POSTGRES_PASSWORD: gps_pass_cambia_esto
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Esquema y vistas operativas: se ejecutan en orden alfabético
+      # la primera vez que se inicializa el volumen pgdata.
+      - ./sql:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gps -d gpsdb"]
@@ -58,7 +61,7 @@ services:
 
       CUDA_VISIBLE_DEVICES: "0"
 
-      DATABASE_URL: postgresql://gps:gps_pass_cambia_esto@postgres:5432/gpsdb
+      DATABASE_URL: postgresql://gps:${POSTGRES_PASSWORD}@postgres:5432/gpsdb
 
     depends_on:
       - ollama
@@ -93,12 +96,18 @@ services:
       - ./.env
     environment:
       TZ: America/Monterrey
+
+      N8N_EDITOR_BASE_URL: https://${NGROK_DOMAIN}
       WEBHOOK_URL: https://${NGROK_DOMAIN}/
+      N8N_PROXY_HOPS: 1
+
+      DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: gpsdb
+      DB_POSTGRESDB_DATABASE: n8ndb
       DB_POSTGRESDB_USER: gps
-      DB_POSTGRESDB_PASSWORD: gps_pass_cambia_esto
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
       N8N_DEFAULT_BINARY_DATA_MODE: filesystem
     volumes:
       - n8n_data:/home/node/.n8n
@@ -132,7 +141,6 @@ services:
 
   # OPCIONAL:
   # Servicio para ejecutar el backfill de correo como contenedor aparte.
-  # Yo primero probaría manualmente antes de dejarlo fijo.
   #
   # mail_backfill:
   #   image: node:20-bookworm
@@ -146,7 +154,7 @@ services:
   #     PGPORT: 5432
   #     PGDATABASE: gpsdb
   #     PGUSER: gps
-  #     PGPASSWORD: gps_pass_cambia_esto
+  #     PGPASSWORD: ${POSTGRES_PASSWORD}
   #     IMAP_HOST: imap.gmail.com
   #     IMAP_PORT: 993
   #     IMAP_SECURE: "true"
