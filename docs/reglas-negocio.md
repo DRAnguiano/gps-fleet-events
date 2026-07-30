@@ -42,16 +42,20 @@ Ocho horas es aproximadamente un descanso completo. Cruzado con el estatus, el s
 - `EN_ZONA_LAGUNA` + detención larga → el operador está en su casa; disponible con aviso previo.
 - `PARADA_EN_RUTA` + detención larga → **anomalía.** Nadie descansa 8 horas a mitad de un tramo sin motivo. Amerita llamada.
 
-## Regla 4 — Sin señal vs. sin lectura reciente
+## Regla 4 — Qué hace la unidad y hace cuánto lo sabemos son dos preguntas
 
-Se separan dos casos que se confunden fácil:
+`v_unidad_estatus` las responde por separado:
 
-- **`SIN_SENAL`** — el último evento fue `CONNECTION_LOST`. El proveedor confirmó que perdió comunicación con la unidad.
-- **`SIN_LECTURA_RECIENTE`** — no llegó ningún evento en más de 60 minutos. La unidad puede estar bien; puede haberse caído la ingesta, el correo, o el propio proveedor.
+- **`estatus`** — qué está haciendo, según su último reporte.
+- **`lectura_reciente`** (y `horas_sin_reporte`) — si ese dato es de fiar. La ventana es de 60 minutos.
 
-Distinguirlos importa porque el segundo caso **también detecta fallas del sistema**. Si de pronto muchas unidades pasan a `SIN_LECTURA_RECIENTE` al mismo tiempo, el problema no está en la flota: está en el buzón, en n8n o en la base.
+Mezclarlas fue un error de la primera versión de la vista, y vale la pena entender por qué. `SIN_LECTURA_RECIENTE` era un valor de `estatus`, así que **pisaba la clasificación**: una unidad esperando en patio se veía igual que una atorada en carretera, porque ninguna de las dos genera alertas mientras está detenida. Se perdía justo la distinción que sirve para decidir. Hoy esa unidad reporta `EN_BASE` con `lectura_reciente = false`, y el bot lo dice tal cual: *"en base o patio (disponible) … ⚠ último reporte hace 10 h"*.
 
-La ventana de 60 minutos depende de qué tan seguido dispare alertas tu configuración del proveedor. Con alertas más esporádicas, hay que ampliarla o produce falsos positivos.
+`SIN_SENAL` sí es un estatus, y es distinto: no es que falten reportes, es que el proveedor **confirmó** la pérdida de comunicación con un evento `CONNECTION_LOST`.
+
+La falta de lectura reciente sigue sirviendo para **detectar fallas del sistema**: si de pronto muchas unidades la pierden a la vez, el problema no está en la flota sino en el buzón, en n8n o en la base. Por eso el bot responde `¿está entrando información?` con la última carga registrada.
+
+La ventana de 60 minutos depende de qué tan seguido dispare alertas tu configuración del proveedor. Con alertas esporádicas hay que ampliarla, o casi toda la flota aparecerá sin lectura reciente.
 
 ## Regla 5 — Combustible
 
@@ -74,7 +78,7 @@ Ventana de "reciente" ......... 60 min
 Detención larga ............... 8 h
 ```
 
-Para cambiarlos, edita `sql/02_vistas_operativas.sql` y vuelve a aplicarlo (las vistas son `CREATE OR REPLACE`, no hace falta recrear la base):
+Para cambiarlos, edita `sql/02_vistas_operativas.sql` y vuelve a aplicarlo. El archivo elimina y recrea las vistas, así que se puede reaplicar sobre una base en uso sin tocar los datos —pero hay que volver a conceder los permisos del usuario de Power BI:
 
 ```bash
 docker exec -i gps_postgres psql -U gps -d gpsdb < sql/02_vistas_operativas.sql

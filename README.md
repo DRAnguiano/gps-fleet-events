@@ -62,7 +62,12 @@ Todo vive en `gps_event`, con las columnas estables como campos y lo variable en
 Una unidad con velocidad 0 puede estar disponible en patio, con el operador en su casa, o atorada en carretera. En el correo las tres se ven idénticas. Las vistas de [`sql/02_vistas_operativas.sql`](sql/02_vistas_operativas.sql) las separan cruzando velocidad, geocerca, zona geográfica (área metropolitana de La Laguna) y tiempo transcurrido. El razonamiento detrás de cada umbral: [`docs/reglas-negocio.md`](docs/reglas-negocio.md).
 
 ### 4. Consulta: Power BI y bot conversacional
-Power BI se conecta a las vistas para combustible y tiempo en carretera. En paralelo, un bot de Telegram permite preguntar en lenguaje natural: n8n recibe el mensaje, llama a `/ask` de la API en FastAPI, que usa un LLM local (Ollama) con RAG sobre documentos internos y responde al chat.
+Power BI se conecta a las vistas para combustible y tiempo en carretera. En paralelo, un bot de Telegram permite preguntar en lenguaje natural: n8n recibe el mensaje y llama a `/ask`, que resuelve por dos caminos según la pregunta:
+
+- **Consulta operativa** ("¿dónde está la T-142?", "¿qué unidades están libres?") → consultas SQL fijas contra `gps_event` y sus vistas. El LLM no participa: los datos vienen exactos de la base y se formatean con plantillas, siempre con unidad, hora y advertencia si el dato es viejo.
+- **Consulta documental** ("¿qué dice el manual sobre…") → RAG con un LLM local (Ollama) sobre los PDF indexados.
+
+El modelo **nunca genera SQL**. El porqué y el detalle de las siete intenciones reconocidas están en [`docs/consultas-del-bot.md`](docs/consultas-del-bot.md).
 
 ### 5. Continuidad: el buzón es el respaldo
 El servidor está en sitio y sin UPS. La recuperación tiene dos capas:
@@ -144,7 +149,12 @@ Procesa el buzón por lotes con pausas entre bloques para no toparse con los lí
 ## Estructura
 
 ```
-app/                      API FastAPI + capa RAG (índice, LLM, prompts)
+app/
+  app.py                  API FastAPI (/ask, /fleet/status, /search, /reindex)
+  fleet_intent.py         Router de consultas operativas y formato de respuesta
+  fleet_queries.py        Consultas SQL fijas sobre gps_event y sus vistas
+  indexer.py              Capa RAG (índice vectorial, LLM)
+  persona_config.py       Persona del asistente operativo
 shared/parseGpsEmail.js   Parser de alertas — compartido por n8n y el backfill
 scripts/
   backfill_gps_event.js   Reconstrucción histórica desde IMAP
@@ -162,6 +172,7 @@ data/                     Documentos para RAG (no versionado)
 - [Parser de correo y catálogo de eventos](docs/parser-correo.md)
 - [Modelo de datos](docs/base-de-datos.md)
 - [Reglas de negocio operativas](docs/reglas-negocio.md)
+- [Consultas operativas del bot](docs/consultas-del-bot.md)
 - [Operación: backfill, respaldos y recuperación](docs/operacion.md)
 
 ## Seguridad

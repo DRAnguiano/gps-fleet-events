@@ -56,6 +56,28 @@ REPEAT_PENALTY = float(
 )
 
 # =========================
+# BASE OPERATIVA (gps_event)
+# =========================
+
+# Si queda vacío, las consultas de flota se desactivan y /ask responde
+# únicamente sobre documentos.
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+# Zona en la que se muestran las horas al usuario. Los eventos se guardan en
+# TIMESTAMPTZ, así que esto solo afecta a la presentación.
+FLEET_TZ = os.getenv("FLEET_TZ", "America/Monterrey")
+
+# Corta consultas colgadas: el bot responde por Telegram y nadie espera.
+FLEET_QUERY_TIMEOUT_S = float(
+    os.getenv("FLEET_QUERY_TIMEOUT_S", "5")
+)
+
+# A partir de cuántas horas sin lectura se advierte que el dato es viejo.
+FLEET_STALE_HOURS = float(
+    os.getenv("FLEET_STALE_HOURS", "1")
+)
+
+# =========================
 # SEGURIDAD
 # =========================
 

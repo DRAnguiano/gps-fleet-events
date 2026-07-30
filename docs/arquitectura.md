@@ -125,5 +125,6 @@ Eso no es cosmético: si el hash del workflow no coincidiera **bit a bit** con e
 
 ## Deuda conocida
 
-- **El bot conversacional no consulta `gps_event`.** Hoy `/ask` responde sobre documentos PDF indexados. Las consultas de estatus de unidad se resolvieron con nodos de Postgres en n8n contra las vistas. Unificar ambos caminos —darle al LLM acceso a consultas SQL controladas— es el siguiente paso natural. Mientras tanto, el `SYSTEM_PROMPT` instruye al modelo a decir que no tiene el dato en lugar de deducirlo.
+- **El bot solo entiende las siete intenciones cableadas** en `app/fleet_intent.py`. Una pregunta operativa formulada de una forma no prevista cae al RAG documental y termina en "no tengo ese dato", en lugar de consultar la base. Se corrige agregando la variante a la lista de palabras clave; el catálogo de intenciones está en [consultas-del-bot.md](consultas-del-bot.md).
+- **Las consultas operativas no cruzan unidad con operador ni con viaje.** La base solo tiene eventos del GPS: sabe dónde está la unidad, no quién la trae ni a qué viaje está asignada. Para responder "¿quién trae la T-142?" habría que integrar el sistema de asignación de viajes.
 - **El workflow de ingesta es una reconstrucción**, no el original (ver arriba). Su lógica está verificada contra el parser y probada contra Postgres, pero las versiones de nodo (`emailReadImap` v2, `postgres` v2.4, `code` v2, `if` v2) corresponden a las de n8n al momento de escribirlo: en una instancia más nueva puede requerir ajustes al importar.

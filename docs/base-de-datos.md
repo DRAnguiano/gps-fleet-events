@@ -81,7 +81,7 @@ RETURNING id;
 |---|---|
 | `v_unidad_ultimo_evento` | ¿Cuál fue la última señal de cada unidad? |
 | `v_unidad_ultimo_movimiento` | ¿Cuándo se movió de verdad por última vez? |
-| `v_unidad_estatus` | ¿En qué estado está y desde hace cuánto? |
+| `v_unidad_estatus` | ¿En qué estado está, desde hace cuánto, y qué tan fresco es el dato? |
 | `v_combustible_diario` | Litros cargados/descargados y odómetro por unidad y día |
 | `v_cortes_conexion` | Historial de pérdidas y restablecimientos de señal |
 
@@ -104,14 +104,14 @@ ORDER BY
   horas_sin_moverse DESC;
 ```
 
-**Unidades sin señal desde hace más de 2 horas:**
+**Unidades sin señal o sin reportar desde hace más de 2 horas:**
 
 ```sql
-SELECT unit_code, ultimo_evento_at, geofence_name
+SELECT unit_code, estatus, horas_sin_reporte, geofence_name
 FROM v_unidad_estatus
-WHERE estatus IN ('SIN_SENAL', 'SIN_LECTURA_RECIENTE')
-  AND ultimo_evento_at < now() - INTERVAL '2 hours'
-ORDER BY ultimo_evento_at;
+WHERE estatus = 'SIN_SENAL'
+   OR horas_sin_reporte > 2
+ORDER BY horas_sin_reporte DESC;
 ```
 
 **Descargas de combustible del último mes, con contexto:**

@@ -10,6 +10,9 @@ from .indexer import (
     _to_int,
 )
 
+from . import fleet_intent
+from . import fleet_queries
+
 from .persona_config import SYSTEM_PROMPT
 from .settings import (
     REINDEX_API_KEY,
@@ -76,6 +79,61 @@ def _public_error(exc: Exception):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# =========================================================
+# ESTATUS DE FLOTA
+#
+# Acceso directo para n8n y para tableros: la misma respuesta
+# que da /ask, pero sin pasar por la detección de intención.
+# =========================================================
+
+@app.get("/fleet/status")
+def fleet_status(
+    unit: str | None = Query(default=None),
+):
+    if not fleet_queries.is_enabled():
+        return JSONResponse(
+            status_code=503,
+            content={"error": "fleet_db_unavailable"},
+        )
+
+    try:
+        if unit:
+            resolved = fleet_queries.resolve_unit(unit)
+
+
+            if not resolved:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "unit_not_found", "unit": unit},
+                )
+
+            return {
+                "unit": resolved,
+                "status": fleet_queries.unit_status(resolved),
+            }
+
+        return {
+            "available": fleet_queries.available_units(),
+            "without_signal": fleet_queries.units_without_signal(),
+            "long_stops": fleet_queries.long_stops(),
+        }
+
+    except fleet_queries.FleetUnavailable as e:
+        print(f"[fleet] Base no disponible: {e}")
+
+        return JSONResponse(
+            status_code=503,
+            content={"error": "fleet_db_unavailable"},
+        )
+
+    except Exception as e:
+        traceback.print_exc()
+
+        return JSONResponse(
+            status_code=500,
+            content={"error": _public_error(e)},
+        )
 
 # =========================================================
 # REINDEX
@@ -166,6 +224,34 @@ def ask(body: AskBody):
     try:
 
         question = body.q.strip()
+
+        # =====================================================
+        # CONSULTA OPERATIVA (gps_event)
+        #
+        # Va primero porque tiene la respuesta exacta: "¿dónde
+        # está la T-142?" se contesta con la base de eventos, no
+        # con un PDF. Si no aplica, cae al RAG documental.
+        # =====================================================
+
+        try:
+            operativa = fleet_intent.try_answer(question)
+        except Exception as e:
+            # La base operativa es un extra: si falla, el bot sigue
+            # respondiendo sobre documentos en vez de caerse.
+            traceback.print_exc()
+            operativa = None
+            print(f"[fleet] Consulta operativa fallida: {type(e).__name__}: {e}")
+
+        if operativa:
+            final = _sanitize(operativa["text"])
+
+            return {
+                "text": final,
+                "chunks": _split_for_telegram(final),
+                "mode": "fleet",
+                "intent": operativa["intent"],
+                "unit": operativa.get("matched_unit"),
+            }
 
         # =====================================================
         # RAG DOCUMENTAL

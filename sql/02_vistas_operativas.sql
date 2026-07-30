@@ -18,6 +18,17 @@
 -- ("TORREÓN, COAH.", "Gomez Palacio"); unaccent permite compararlos sin sorpresas.
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
+-- CREATE OR REPLACE VIEW no admite agregar o reordenar columnas: hay que
+-- recrear. Se eliminan primero las dependientes, para que reaplicar este
+-- archivo funcione siempre, tanto en una base nueva como en una en uso.
+-- Las vistas no guardan datos; lo que sí hay que rehacer después es cualquier
+-- permiso concedido sobre ellas (por ejemplo el usuario de Power BI).
+DROP VIEW IF EXISTS v_cortes_conexion;
+DROP VIEW IF EXISTS v_combustible_diario;
+DROP VIEW IF EXISTS v_unidad_estatus;
+DROP VIEW IF EXISTS v_unidad_ultimo_movimiento;
+DROP VIEW IF EXISTS v_unidad_ultimo_evento;
+
 -- ---------------------------------------------------------------------------
 -- Último evento conocido por unidad.
 -- ---------------------------------------------------------------------------
@@ -59,6 +70,11 @@ ORDER BY unit_code, event_time DESC;
 --                       del operador (las unidades se quedan con el operador).
 --   PARADA_EN_RUTA   -> detenida fuera de zona conocida: atoramiento, caseta,
 --                       descanso o incidente. NO es disponibilidad.
+--
+-- Aparte del estatus, `lectura_reciente` dice si el dato es de fiar. Son dos
+-- preguntas distintas —qué hace la unidad y hace cuánto lo sabemos— y
+-- mezclarlas hacía que una unidad disponible en patio se viera como un
+-- problema de señal.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_unidad_estatus AS
 WITH base AS (
@@ -78,15 +94,28 @@ WITH base AS (
 )
 SELECT
   unit_code,
+  -- Qué está haciendo la unidad, según su último reporte.
+  --
+  -- La frescura del dato NO entra aquí, va aparte en lectura_reciente. Una
+  -- unidad parada en patio puede pasar horas sin disparar una sola alerta:
+  -- si la falta de reportes pisara la clasificación, casi todas las unidades
+  -- detenidas se verían igual y se perdería la distinción entre "disponible
+  -- en base" y "atorada en ruta", que es justo la que sirve para decidir.
   CASE
-    WHEN ultimo_tipo = 'CONNECTION_LOST'                        THEN 'SIN_SENAL'
-    WHEN ultimo_evento_at < now() - INTERVAL '60 minutes'
-     AND ultimo_tipo <> 'CONNECTION_RESTORED'                   THEN 'SIN_LECTURA_RECIENTE'
-    WHEN speed_kmh >= 5                                         THEN 'EN_MOVIMIENTO'
-    WHEN geofence_kind = 'BASE'                                 THEN 'EN_BASE'
-    WHEN en_zona_laguna                                         THEN 'EN_ZONA_LAGUNA'
-    ELSE                                                             'PARADA_EN_RUTA'
+    WHEN ultimo_tipo = 'CONNECTION_LOST' THEN 'SIN_SENAL'
+    WHEN speed_kmh >= 5                  THEN 'EN_MOVIMIENTO'
+    WHEN geofence_kind = 'BASE'          THEN 'EN_BASE'
+    WHEN en_zona_laguna                  THEN 'EN_ZONA_LAGUNA'
+    ELSE                                      'PARADA_EN_RUTA'
   END AS estatus,
+
+  -- Qué tan confiable es ese estatus. Cuando muchas unidades pierden la
+  -- lectura reciente a la vez, el problema no está en la flota: está en la
+  -- ingesta, el buzón o la base.
+  (ultimo_evento_at >= now() - INTERVAL '60 minutes') AS lectura_reciente,
+  ROUND(EXTRACT(EPOCH FROM (now() - ultimo_evento_at)) / 3600.0, 1)
+    AS horas_sin_reporte,
+
   ultimo_evento_at,
   ultimo_movimiento_at,
   -- Cuánto lleva sin moverse: lo que Tráfico usa para decidir el siguiente viaje.

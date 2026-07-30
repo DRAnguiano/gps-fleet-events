@@ -22,6 +22,10 @@ nltk==3.8.1
 python-dotenv==1.0.1
 requests==2.32.3
 
+# === Base operativa (consultas de flota sobre gps_event) ===
+psycopg[binary]==3.2.3
+psycopg-pool==3.2.4
+
 # === (Opcional, para PDFs) ===
 pypdf==4.2.0
 unstructured==0.15.7

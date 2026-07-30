@@ -61,7 +61,12 @@ services:
 
       CUDA_VISIBLE_DEVICES: "0"
 
+      # Habilita las consultas operativas de /ask y /fleet/status.
+      # Sin esta variable, el bot solo responde sobre documentos.
       DATABASE_URL: postgresql://gps:${POSTGRES_PASSWORD}@postgres:5432/gpsdb
+      FLEET_TZ: America/Monterrey
+      FLEET_QUERY_TIMEOUT_S: "5"
+      FLEET_STALE_HOURS: "1"
 
     depends_on:
       - ollama
