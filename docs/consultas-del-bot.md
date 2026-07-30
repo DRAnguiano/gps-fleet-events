@@ -90,6 +90,10 @@ T-142 — combustible, últimos 7 días:
 No encuentro la unidad T-999 en los eventos registrados. Verifica el número.
 ```
 
+## Desde Telegram
+
+El workflow `n8n/telegram_rag_workflow.json` expone estas consultas como comandos (`/estatus T-142`, `/disponibles`, `/sinsenal`, `/atoradas`, `/combustible`, `/eventos`, `/salud`). El nodo de comandos no consulta la base: traduce el comando a la pregunta equivalente y la manda a `/ask`, para que el formato del texto salga de un solo lugar. Detalle en [`../n8n/README.md`](../n8n/README.md).
+
 ## Endpoint directo
 
 Para n8n o tableros, sin pasar por la detección de intención:

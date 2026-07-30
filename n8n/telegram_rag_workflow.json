@@ -1,5 +1,5 @@
 {
-  "name": "Telegram → RAG (/ask) → Reply",
+  "name": "Telegram → Estatus de flota / RAG → Reply",
   "nodes": [
     {
       "parameters": {},
@@ -7,7 +7,7 @@
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1,
-      "position": [-640, 0],
+      "position": [-880, 0],
       "credentials": {
         "telegramApi": {
           "id": "__RELINK__",
@@ -32,7 +32,7 @@
       "name": "Set extract",
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
-      "position": [-420, 0]
+      "position": [-680, 0]
     },
     {
       "parameters": {
@@ -50,32 +50,91 @@
       "name": "IF private",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [-220, 0]
+      "position": [-480, 0]
     },
     {
       "parameters": {
-        "authentication": "none",
-        "url": "http://api:8000/ask",
-        "method": "POST",
-        "jsonParameters": true,
-        "optionsJson": "={\"bodyParametersJson\": {\"q\": \"={{$json.text}}\", \"top_k\": 4}}"
+        "jsCode": "// Traduce los comandos de Telegram a preguntas para /ask.\n//\n// No consulta la base por su cuenta: /ask ya resuelve estatus contra\n// gps_event y devuelve el texto formateado, con unidad, hora y aviso de dato\n// viejo. Duplicar aquí ese formato crearía una segunda versión que se iría\n// separando de la de la API.\n//\n// Los comandos existen porque escribir \"/estatus T-142\" en el radio mental de\n// Tráfico es más rápido y más predecible que redactar una pregunta: no\n// dependen de que el router de intenciones reconozca la frase.\n\nconst AYUDA = [\n  'Consultas de flota:',\n  '',\n  '/estatus <unidad>      dónde está y desde hace cuánto',\n  '/disponibles           unidades en base o en la zona de La Laguna',\n  '/sinsenal              unidades sin señal o sin reportar',\n  '/atoradas              detenidas en ruta por mucho tiempo',\n  '/combustible <unidad>  cargas y descargas de los últimos 7 días',\n  '/eventos <unidad>      últimos eventos registrados',\n  '/salud                 si está entrando información al sistema',\n  '',\n  'También puedes preguntar con tus palabras, por ejemplo:',\n  '\"¿dónde está la T-142?\" o \"¿qué unidades están libres?\"',\n].join('\\n');\n\n// Comando -> pregunta que el router de /ask reconoce.\nconst SIN_ARGUMENTO = {\n  '/disponibles': '¿qué unidades están disponibles?',\n  '/libres': '¿qué unidades están disponibles?',\n  '/sinsenal': '¿qué unidades están sin señal?',\n  '/atoradas': '¿hay unidades atoradas en ruta?',\n  '/salud': '¿está entrando información?',\n};\n\nconst CON_ARGUMENTO = {\n  '/estatus': (u) => `estatus de la unidad ${u}`,\n  '/status': (u) => `estatus de la unidad ${u}`,\n  '/combustible': (u) => `combustible de la unidad ${u}`,\n  '/eventos': (u) => `últimos eventos de la unidad ${u}`,\n};\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const base = item.json;\n  const texto = (base.text || '').trim();\n\n  // Mensaje normal: pasa tal cual a /ask.\n  if (!texto.startsWith('/')) {\n    out.push({ json: { ...base, question: texto, direct_reply: null } });\n    continue;\n  }\n\n  // En grupos Telegram manda \"/estatus@mi_bot\"; se limpia el sufijo.\n  const partes = texto.split(/\\s+/);\n  const comando = partes[0].split('@')[0].toLowerCase();\n  const argumento = partes.slice(1).join(' ').trim();\n\n  if (comando === '/start' || comando === '/ayuda' || comando === '/help') {\n    out.push({ json: { ...base, question: null, direct_reply: AYUDA } });\n    continue;\n  }\n\n  if (SIN_ARGUMENTO[comando]) {\n    out.push({ json: { ...base, question: SIN_ARGUMENTO[comando], direct_reply: null } });\n    continue;\n  }\n\n  if (CON_ARGUMENTO[comando]) {\n    if (!argumento) {\n      out.push({\n        json: {\n          ...base,\n          question: null,\n          direct_reply: `Falta la unidad. Ejemplo: ${comando} T-142`,\n        },\n      });\n      continue;\n    }\n\n    out.push({\n      json: { ...base, question: CON_ARGUMENTO[comando](argumento), direct_reply: null },\n    });\n    continue;\n  }\n\n  out.push({\n    json: {\n      ...base,\n      question: null,\n      direct_reply: `No conozco el comando ${comando}.\\n\\n${AYUDA}`,\n    },\n  });\n}\n\nreturn out;"
       },
-      "id": "RagAsk",
-      "name": "RAG: Ask (/ask)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [20, 0]
+      "id": "RouteCommand",
+      "name": "Rutear comando",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-280, 0]
     },
     {
       "parameters": {
-        "chatId": "={{$node[\"Set extract\"].json.chat_id}}",
-        "text": "={{$json.text || 'No encontré respuesta.'}}"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "necesita-api",
+              "leftValue": "={{ $json.question }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "IfNeedsApi",
+      "name": "IF necesita API",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-60, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/ask",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": {{ JSON.stringify($json.question) }},\n  \"top_k\": 4\n}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "AskApi",
+      "name": "API: /ask",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, -120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Telegram corta los mensajes en 4096 caracteres y una lista de flota\n// completa los pasa con facilidad. La API ya devuelve `chunks` partidos por\n// salto de línea; aquí solo se convierten en items para que el nodo de envío\n// mande uno por mensaje, en orden.\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const cuerpo = item.json;\n  const chat_id = $('Rutear comando').first().json.chat_id;\n\n  const partes =\n    Array.isArray(cuerpo.chunks) && cuerpo.chunks.length\n      ? cuerpo.chunks\n      : [cuerpo.text || 'No encontré respuesta.'];\n\n  for (const parte of partes) {\n    out.push({ json: { chat_id, reply: parte } });\n  }\n}\n\nreturn out;"
+      },
+      "id": "SplitReply",
+      "name": "Partir respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, -120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Respuestas que no necesitan la API: ayuda y errores de comando.\nreturn $input.all().map((item) => ({\n  json: { chat_id: item.json.chat_id, reply: item.json.direct_reply },\n}));"
+      },
+      "id": "DirectReply",
+      "name": "Respuesta directa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 140]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {}
       },
       "id": "TelegramSend",
       "name": "Telegram: Send",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [260, 0],
+      "position": [640, 0],
       "credentials": {
         "telegramApi": {
           "id": "__RELINK__",
@@ -93,12 +152,28 @@
     },
     "IF private": {
       "main": [
-        [{ "node": "RAG: Ask (/ask)", "type": "main", "index": 0 }],
+        [{ "node": "Rutear comando", "type": "main", "index": 0 }],
         []
       ]
     },
-    "RAG: Ask (/ask)": {
+    "Rutear comando": {
+      "main": [[{ "node": "IF necesita API", "type": "main", "index": 0 }]]
+    },
+    "IF necesita API": {
+      "main": [
+        [{ "node": "API: /ask", "type": "main", "index": 0 }],
+        [{ "node": "Respuesta directa", "type": "main", "index": 0 }]
+      ]
+    },
+    "API: /ask": {
+      "main": [[{ "node": "Partir respuesta", "type": "main", "index": 0 }]]
+    },
+    "Partir respuesta": {
+      "main": [[{ "node": "Telegram: Send", "type": "main", "index": 0 }]]
+    },
+    "Respuesta directa": {
       "main": [[{ "node": "Telegram: Send", "type": "main", "index": 0 }]]
     }
-  }
+  },
+  "settings": { "executionOrder": "v1" }
 }

@@ -69,6 +69,8 @@ Power BI se conecta a las vistas para combustible y tiempo en carretera. En para
 
 El modelo **nunca genera SQL**. El porqué y el detalle de las siete intenciones reconocidas están en [`docs/consultas-del-bot.md`](docs/consultas-del-bot.md).
 
+Desde Telegram, lo mismo está disponible como comandos: `/estatus T-142`, `/disponibles`, `/sinsenal`, `/atoradas`, `/combustible T-142`, `/eventos T-142`, `/salud`.
+
 ### 5. Continuidad: el buzón es el respaldo
 El servidor está en sitio y sin UPS. La recuperación tiene dos capas:
 
