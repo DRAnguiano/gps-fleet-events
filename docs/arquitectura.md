@@ -86,9 +86,11 @@ Telegram necesita un webhook público y el servidor está detrás del NAT de la 
 
 ## Flujo de ingesta en n8n
 
-> **El JSON exportado de este flujo se perdió.** n8n guardaba sus workflows en la base `n8ndb`, dentro del volumen de Postgres del proyecto, y ese volumen se eliminó al migrar el servidor a otro sistema. Nunca se exportó a archivo, así que no hay copia: ni en los respaldos de Docker ni en el repositorio. Lo que sigue es la descripción nodo por nodo para reconstruirlo desde cero.
+> **El workflow original se perdió.** n8n guardaba sus workflows en la base `n8ndb`, dentro del volumen de Postgres del proyecto, y ese volumen se eliminó al migrar el servidor a otro sistema. No hay copia en los respaldos de Docker ni en el repositorio.
 >
-> La lección quedó incorporada al proyecto: los workflows son código y pertenecen al repositorio. El de Telegram sí está exportado (`n8n/telegram_rag_workflow.json`).
+> `n8n/imap_ingest_workflow.json` es una **reconstrucción**, no el archivo original. Se genera con `node scripts/build_ingest_workflow.js` a partir del parser real, y su equivalencia con el backfill está verificada (ver más abajo). Al importarlo, revisa que las versiones de nodo coincidan con las de tu instancia de n8n.
+>
+> La lección quedó incorporada al proyecto: los workflows son código y pertenecen al repositorio.
 
 1. **Email Trigger (IMAP)** — se conecta a la cuenta de alertas, carpeta `INBOX`, con "marcar como leído" activado. Descargar el mensaje completo, no solo los encabezados.
 2. **Code** — importa la lógica de `shared/parseGpsEmail.js` (el directorio se monta en el contenedor de n8n como `/files/shared`) y la aplica al mensaje:
@@ -102,12 +104,27 @@ Telegram necesita un webhook público y el servidor está detrás del NAT de la 
      email_message_id: $json.messageId,
    }) }];
    ```
-   > Ejecutar `require` de un archivo externo exige `NODE_FUNCTION_ALLOW_EXTERNAL` / `NODE_FUNCTION_ALLOW_BUILTIN` en el contenedor de n8n. La alternativa usada en producción fue pegar el contenido del parser dentro del nodo *Code*, a costa de tener que sincronizarlo a mano cuando cambia.
+   > Ejecutar `require` de un archivo externo exige `NODE_FUNCTION_ALLOW_EXTERNAL` / `NODE_FUNCTION_ALLOW_BUILTIN` en el contenedor de n8n. Por eso el workflow reconstruido **embebe** el parser en el nodo, y para que esa copia no se separe del original se genera con un script (ver abajo).
 3. **IF** — descarta los eventos con `parse_ok === false` (sin unidad o sin hora) hacia una rama de revisión manual. Un evento sin unidad no es útil y contamina las vistas.
 4. **Postgres** — inserción con `ON CONFLICT (source_hash) DO UPDATE`, con el mismo SQL que `upsertGpsEvent()` en `scripts/backfill_gps_event.js`.
+
+### Cómo se genera, y por qué no se edita a mano
+
+```bash
+node scripts/build_ingest_workflow.js   # reescribe n8n/imap_ingest_workflow.json
+```
+
+El script toma `shared/parseGpsEmail.js` tal cual y lo inyecta en el nodo *Code*. Editar el JSON a mano crearía una segunda versión del parser que se iría separando del original en silencio — exactamente el problema que la arquitectura evita al compartir un solo módulo entre n8n y el backfill.
+
+**El detalle que obliga a todo esto es el hash.** El parser calcula el `source_hash` con `crypto.createHash('sha256')`, y el nodo *Code* de n8n no puede hacer `require('crypto')` sin habilitar `NODE_FUNCTION_ALLOW_BUILTIN`. El generador sustituye ese `require` por una implementación de SHA-256 en JavaScript puro.
+
+Eso no es cosmético: si el hash del workflow no coincidiera **bit a bit** con el del backfill, el mismo correo entraría dos veces con hashes distintos y la idempotencia —el cimiento de todo el sistema— dejaría de existir. Por eso el script se niega a escribir el archivo si la verificación falla, y verifica dos cosas:
+
+1. El parser embebido produce exactamente la misma salida que el módulo original sobre casos representativos (combustible, conexión, unidad no reconocible).
+2. El SHA-256 puro coincide con `crypto` para cadenas vacías, con acentos, con emoji y de longitudes 55/56/63/64/65 y 1000 bytes — los límites de bloque donde fallan las implementaciones incompletas.
 
 ## Deuda conocida
 
 - **La persona del RAG no corresponde a este dominio.** `app/persona_config.py` define un asistente de reclutamiento (heredado del proyecto de Capital Humano) y `app/app.py` enruta por palabras clave de RH. La capa de recuperación funciona, pero para el uso operativo de flota hay que reemplazar el `SYSTEM_PROMPT` y el router.
 - **El bot conversacional no consulta `gps_event`.** Hoy `/ask` responde sobre documentos PDF indexados. Las consultas de estatus de unidad se resolvieron con nodos de Postgres en n8n contra las vistas. Unificar ambos caminos —darle al LLM acceso a consultas SQL controladas— es el siguiente paso natural.
-- **El workflow de ingesta no está versionado** y su original ya no existe (ver arriba). Reconstruirlo a partir de la descripción de este documento es trabajo pendiente; el parser, que es donde vive la lógica difícil, sí se conserva íntegro en `shared/parseGpsEmail.js`.
+- **El workflow de ingesta es una reconstrucción**, no el original (ver arriba). Su lógica está verificada contra el parser y probada contra Postgres, pero las versiones de nodo (`emailReadImap` v2, `postgres` v2.4, `code` v2, `if` v2) corresponden a las de n8n al momento de escribirlo: en una instancia más nueva puede requerir ajustes al importar.

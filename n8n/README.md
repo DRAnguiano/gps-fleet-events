@@ -4,9 +4,40 @@ Importar desde `http://localhost:5678` → *Import from File*. Las credenciales 
 
 | Archivo | Qué hace | Estado |
 |---|---|---|
+| `imap_ingest_workflow.json` | Correo de alerta → parser → `gps_event` | Reconstruido y verificado; **generado**, no se edita a mano |
 | `telegram_rag_workflow.json` | Telegram → API `/ask` → respuesta | Vigente |
 | `kommo_crm_workflow.json` | Telegram → alta/búsqueda de contacto en Kommo CRM → API → respuesta | Histórico, requiere ajustes |
-| *(ingesta IMAP → Postgres)* | Correo de alerta → parser → `gps_event` | **Perdido**, ver abajo |
+
+---
+
+## `imap_ingest_workflow.json`
+
+El corazón del sistema: convierte cada alerta del proveedor en una fila de `gps_event`.
+
+```
+Email Trigger (IMAP)          no leídos; al procesarlos los marca como leídos
+  └─ Parse GPS Email          parser embebido (idéntico al del backfill)
+      └─ IF parse_ok
+          ├─ true  → Postgres: Upsert gps_event   ON CONFLICT (source_hash)
+          └─ false → Sin unidad u hora → revisar
+```
+
+### No lo edites: regenéralo
+
+```bash
+node scripts/build_ingest_workflow.js
+```
+
+El nodo *Code* lleva `shared/parseGpsEmail.js` embebido, porque n8n no puede hacer `require` de un archivo del disco sin `NODE_FUNCTION_ALLOW_EXTERNAL`. Editar el JSON a mano crearía una segunda versión del parser que se separaría del original en silencio; el generador garantiza que sean el mismo código.
+
+El generador también reemplaza `require('crypto')` por un SHA-256 en JavaScript puro, y **se niega a escribir el archivo** si ese hash no coincide con el de `crypto`. Si difiriera, el mismo correo entraría dos veces con `source_hash` distintos y se rompería la idempotencia de la que depende todo el sistema.
+
+### Antes de importarlo
+
+1. Reconecta las credenciales `ALERTAS_GPS_IMAP` (IMAP) y `GPS_POSTGRES` (Postgres); van como `__RELINK__`.
+2. Revisa que las versiones de nodo (`emailReadImap` v2, `code` v2, `if` v2, `postgres` v2.4) existan en tu instancia. Es una reconstrucción, no el export original: en n8n más nuevo puede pedir ajustes.
+3. Apunta el trigger a `INBOX`. La carpeta del backfill (`HISTORICAL`) debe quedar fuera: ambos usan la marca de "no leído" como trabajo pendiente y se robarían los correos.
+4. La rama de revisión es un *No Operation*. Si quieres enterarte de los correos que el parser no entiende, sustitúyelo por una notificación a Telegram o un insert en una tabla de descartes.
 
 ---
 
@@ -48,10 +79,8 @@ Quedó de una versión anterior de la API y no funciona tal cual contra la actua
 | `POST http://rag_api:8000/query` | El servicio se llama `api` y el endpoint es `/ask` → `http://api:8000/ask` |
 | Lee `{{$json["answer"]}}` | La respuesta trae `text` (y `chunks` ya partidos para Telegram) → `{{$json["text"]}}` |
 
-## Ingesta IMAP → Postgres
+## Sobre el original de la ingesta
 
-**No se conserva.** n8n guardaba sus workflows en la base `n8ndb`, dentro del volumen de Postgres del proyecto, y ese volumen se eliminó al migrar el servidor. Nunca se exportó a archivo.
-
-La descripción nodo por nodo para reconstruirlo está en [`../docs/arquitectura.md`](../docs/arquitectura.md#flujo-de-ingesta-en-n8n). La lógica difícil —el parseo de las alertas— no se perdió: vive en [`../shared/parseGpsEmail.js`](../shared/parseGpsEmail.js).
+El export original **no se conserva**: n8n guardaba sus workflows en la base `n8ndb`, dentro del volumen de Postgres del proyecto, y ese volumen se eliminó al migrar el servidor. `imap_ingest_workflow.json` es una reconstrucción hecha a partir del parser y del SQL del backfill, que sí sobrevivieron.
 
 > Exporta tus workflows al repositorio. Un workflow que solo existe dentro de n8n se pierde con el volumen.

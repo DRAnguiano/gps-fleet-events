@@ -127,7 +127,9 @@ Servicios expuestos: API `:8000` · n8n `:5678` · Adminer `:8080` · Ollama `:1
 
 ### Cargar los workflows de n8n
 
-Abre `http://localhost:5678` e importa los workflows de `n8n/`. Las credenciales viajan como referencias y hay que reconectarlas desde la interfaz. Detalle de cada uno en [`n8n/README.md`](n8n/README.md); el flujo de ingesta IMAP → Postgres se describe nodo por nodo en [`docs/arquitectura.md`](docs/arquitectura.md#flujo-de-ingesta-en-n8n).
+Abre `http://localhost:5678` e importa los workflows de `n8n/`, empezando por `imap_ingest_workflow.json`, que es el que alimenta la base. Las credenciales viajan como referencias y hay que reconectarlas desde la interfaz.
+
+El workflow de ingesta **se genera, no se edita**: lleva el parser embebido y `node scripts/build_ingest_workflow.js` lo mantiene sincronizado con `shared/parseGpsEmail.js`. El porqué está en [`n8n/README.md`](n8n/README.md) y [`docs/arquitectura.md`](docs/arquitectura.md#flujo-de-ingesta-en-n8n).
 
 ### Backfill histórico
 
@@ -147,6 +149,7 @@ shared/parseGpsEmail.js   Parser de alertas — compartido por n8n y el backfill
 scripts/
   backfill_gps_event.js   Reconstrucción histórica desde IMAP
   backup_db.sh            Respaldo diario con rotación
+  build_ingest_workflow.js  Genera el workflow de ingesta desde el parser
 sql/                      Esquema y vistas de negocio (init automático)
 n8n/                      Workflows exportados (Telegram, CRM Kommo)
 docs/                     Documentación técnica y de negocio
@@ -174,7 +177,7 @@ Sistema en operación real. Pendientes:
 
 - [ ] Scoring de anomalías de combustible (la base de eventos ya lo soporta)
 - [ ] Geocercas propias en vez de inferirlas del texto de la alerta
-- [ ] Reconstruir y versionar el workflow de ingesta IMAP (el original se perdió con los volúmenes del servidor; está descrito nodo por nodo en `docs/arquitectura.md`)
+- [ ] Probar el workflow de ingesta reconstruido contra una instancia de n8n en vivo (el original se perdió con los volúmenes del servidor)
 - [ ] Detección de patrones por unidad y operador con modelos de ML
 
 ## Autor
