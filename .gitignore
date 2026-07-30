@@ -27,3 +27,8 @@ respuesta.txt
 .DS_Store
 Thumbs.db
 openapi.json
+
+# Artefactos sueltos de la versión previa (chatbot-rag-pdf)
+Curl para indexar.txt
+n8n-telegram-rag-clean.json
+Personalidad_/

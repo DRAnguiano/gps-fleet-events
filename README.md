@@ -127,7 +127,7 @@ Servicios expuestos: API `:8000` · n8n `:5678` · Adminer `:8080` · Ollama `:1
 
 ### Cargar los workflows de n8n
 
-Abre `http://localhost:5678` e importa `n8n/telegram_rag_workflow.json`. Las credenciales aparecen como `__RELINK__` y hay que reconectarlas desde la interfaz. El flujo de ingesta IMAP → Postgres se describe nodo por nodo en [`docs/arquitectura.md`](docs/arquitectura.md#flujo-de-ingesta-en-n8n).
+Abre `http://localhost:5678` e importa los workflows de `n8n/`. Las credenciales viajan como referencias y hay que reconectarlas desde la interfaz. Detalle de cada uno en [`n8n/README.md`](n8n/README.md); el flujo de ingesta IMAP → Postgres se describe nodo por nodo en [`docs/arquitectura.md`](docs/arquitectura.md#flujo-de-ingesta-en-n8n).
 
 ### Backfill histórico
 
@@ -148,7 +148,7 @@ scripts/
   backfill_gps_event.js   Reconstrucción histórica desde IMAP
   backup_db.sh            Respaldo diario con rotación
 sql/                      Esquema y vistas de negocio (init automático)
-n8n/                      Workflows exportados
+n8n/                      Workflows exportados (Telegram, CRM Kommo)
 docs/                     Documentación técnica y de negocio
 data/                     Documentos para RAG (no versionado)
 ```
