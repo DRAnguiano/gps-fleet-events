@@ -1,0 +1,319 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        -32
+      ],
+      "id": "e9659daa-5aa8-458e-9d3b-e04b2a996118",
+      "name": "Telegram Trigger",
+      "webhookId": "91b7ca6f-7041-4ab2-9743-0e12bf0a7db6",
+      "credentials": {
+        "telegramApi": {
+          "id": "1DSUpw12kerztaaC",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const msg = item.json.message;\n  const from = msg.from;\n  const chat = msg.chat;\n\n  return {\n    json: {\n      text: msg.text || \"\",\n      telegram_user_id: String(from.id),\n      chat_id: String(chat.id),\n      username: from.username || null,\n      first_name: from.first_name || \"\",\n      last_name: from.last_name || \"\",\n      full_name: `${from.first_name || \"\"} ${from.last_name || \"\"}`.trim(),\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        -32
+      ],
+      "id": "35607911-81f6-406b-b4f2-736234f9d8e2",
+      "name": "Normalize Telegram Data"
+    },
+    {
+      "parameters": {
+        "resource": "contacts",
+        "filter": {
+          "query": "={{$json[\"telegram_user_id\"]}}"
+        },
+        "options": {},
+        "limit": 1
+      },
+      "type": "n8n-nodes-kommo.kommo",
+      "typeVersion": 1,
+      "position": [
+        288,
+        -112
+      ],
+      "id": "6fd3ce1b-77f2-4ff3-a9d5-91bb87486a46",
+      "name": "Get list of contacts",
+      "credentials": {
+        "kommoOAuth2Api": {
+          "id": "IrQ44tOqmsWN2Va9",
+          "name": "Kommo account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  let json = item.json;\n\n  // Si Kommo devolvió el string \"empty\"\n  if (typeof json === \"string\") {\n    return {\n      json: {\n        _embedded: { contacts: [] },\n      }\n    };\n  }\n\n  // Si no existe _embedded o contacts, los creamos vacíos\n  if (!json._embedded || !Array.isArray(json._embedded.contacts)) {\n    json._embedded = { contacts: [] };\n  }\n\n  return { json };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -32
+      ],
+      "id": "c55c689f-02dc-4ab5-a635-465a341dd38b",
+      "name": "Normalize Kommo Response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8f5a106b-eb8b-49dd-a7b9-7ad1b841b125",
+              "leftValue": "={{ $json[\"_embedded\"].contacts.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        -16
+      ],
+      "id": "25a2c5f9-0630-4150-aa21-813d532832ec",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const contacts = item.json._embedded.contacts || [];\n  const contact = contacts[0] || {};\n  return {\n    json: {\n      contact_id: contact.id\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -224
+      ],
+      "id": "ccc1da38-2533-44fe-bce1-3599b4be98d5",
+      "name": "Use existing contact_id"
+    },
+    {
+      "parameters": {
+        "resource": "contacts",
+        "operation": "createContacts",
+        "json": true,
+        "jsonString": "=[\n  {\n    \"name\": \"{{$items('Normalize Telegram Data')[0].json.full_name || $items('Normalize Telegram Data')[0].json.username || $items('Normalize Telegram Data')[0].json.telegram_user_id}}\",\n    \"custom_fields_values\": [\n      {\n        \"field_id\": 3753238,\n        \"values\": [\n          {\n            \"value\": \"{{$items('Normalize Telegram Data')[0].json.telegram_user_id}}\"\n          }\n        ]\n      }\n    ]\n  }\n]\n"
+      },
+      "type": "n8n-nodes-kommo.kommo",
+      "typeVersion": 1,
+      "position": [
+        752,
+        16
+      ],
+      "id": "6ab0d332-4353-4509-a5d5-4845a3ceda0e",
+      "name": "Create new contacts",
+      "credentials": {
+        "kommoOAuth2Api": {
+          "id": "IrQ44tOqmsWN2Va9",
+          "name": "Kommo account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const embedded = item.json._embedded || {};\n  const contacts = embedded.contacts || [];\n  const contact = contacts[0] || {};\n  return {\n    json: {\n      contact_id: contact.id\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        32
+      ],
+      "id": "29748b32-4a8b-4d99-878e-d7dc3a28a718",
+      "name": "Use new contact_id"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://rag_api:8000/query",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{$items('Normalize Telegram Data')[0].json.text}}\",\n  \"top_k\": 4\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1152,
+        -112
+      ],
+      "id": "df0a8ce6-3560-420e-b9a4-3d2b0aafca92",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "chatId": "={{$items(\"Normalize Telegram Data\")[0].json.chat_id}}",
+        "text": "={{$json[\"answer\"]}}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        -112
+      ],
+      "id": "8fedf2bd-795a-4c68-9dd1-a72b225c2a51",
+      "name": "Send a text message",
+      "webhookId": "9c4eb033-ae36-48d5-8257-51fdd4e55fce",
+      "credentials": {
+        "telegramApi": {
+          "id": "1DSUpw12kerztaaC",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Telegram Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Telegram Data": {
+      "main": [
+        [
+          {
+            "node": "Get list of contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Kommo Response": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use existing contact_id": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Use existing contact_id",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create new contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create new contacts": {
+      "main": [
+        [
+          {
+            "node": "Use new contact_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get list of contacts": {
+      "main": [
+        [
+          {
+            "node": "Normalize Kommo Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use new contact_id": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "13f949d4-388e-4f73-a7a7-d683fb2f99d2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "022aed4aade895c6c9ea7b29d4ff39d26d67e75f643f68bc7b7ee1928ef53acf"
+  },
+  "id": "KsvyeVFHl12VbwoT",
+  "tags": []
+}

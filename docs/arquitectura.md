@@ -86,7 +86,9 @@ Telegram necesita un webhook público y el servidor está detrás del NAT de la 
 
 ## Flujo de ingesta en n8n
 
-> El JSON exportado de este flujo no está en el repositorio. Esta es la descripción nodo por nodo para reconstruirlo; el que sí está exportado es el de Telegram (`n8n/telegram_rag_workflow.json`).
+> **El JSON exportado de este flujo se perdió.** n8n guardaba sus workflows en la base `n8ndb`, dentro del volumen de Postgres del proyecto, y ese volumen se eliminó al migrar el servidor a otro sistema. Nunca se exportó a archivo, así que no hay copia: ni en los respaldos de Docker ni en el repositorio. Lo que sigue es la descripción nodo por nodo para reconstruirlo desde cero.
+>
+> La lección quedó incorporada al proyecto: los workflows son código y pertenecen al repositorio. El de Telegram sí está exportado (`n8n/telegram_rag_workflow.json`).
 
 1. **Email Trigger (IMAP)** — se conecta a la cuenta de alertas, carpeta `INBOX`, con "marcar como leído" activado. Descargar el mensaje completo, no solo los encabezados.
 2. **Code** — importa la lógica de `shared/parseGpsEmail.js` (el directorio se monta en el contenedor de n8n como `/files/shared`) y la aplica al mensaje:
@@ -108,4 +110,4 @@ Telegram necesita un webhook público y el servidor está detrás del NAT de la 
 
 - **La persona del RAG no corresponde a este dominio.** `app/persona_config.py` define un asistente de reclutamiento (heredado del proyecto de Capital Humano) y `app/app.py` enruta por palabras clave de RH. La capa de recuperación funciona, pero para el uso operativo de flota hay que reemplazar el `SYSTEM_PROMPT` y el router.
 - **El bot conversacional no consulta `gps_event`.** Hoy `/ask` responde sobre documentos PDF indexados. Las consultas de estatus de unidad se resolvieron con nodos de Postgres en n8n contra las vistas. Unificar ambos caminos —darle al LLM acceso a consultas SQL controladas— es el siguiente paso natural.
-- **El workflow de ingesta no está versionado** (ver arriba).
+- **El workflow de ingesta no está versionado** y su original ya no existe (ver arriba). Reconstruirlo a partir de la descripción de este documento es trabajo pendiente; el parser, que es donde vive la lógica difícil, sí se conserva íntegro en `shared/parseGpsEmail.js`.

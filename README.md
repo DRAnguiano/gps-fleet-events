@@ -174,7 +174,7 @@ Sistema en operación real. Pendientes:
 
 - [ ] Scoring de anomalías de combustible (la base de eventos ya lo soporta)
 - [ ] Geocercas propias en vez de inferirlas del texto de la alerta
-- [ ] Exportar el workflow de ingesta IMAP al repositorio
+- [ ] Reconstruir y versionar el workflow de ingesta IMAP (el original se perdió con los volúmenes del servidor; está descrito nodo por nodo en `docs/arquitectura.md`)
 - [ ] Detección de patrones por unidad y operador con modelos de ML
 
 ## Autor
