@@ -22,26 +22,20 @@ Este proyecto convierte ese buzón de correo en una base de datos consultable, y
 
 ## La solución
 
-```
-Proveedor GPS ──(alerta por correo)──> Gmail/IMAP
-                                          │
-                                          ▼
-                                    n8n (trigger IMAP)
-                                          │
-                              shared/parseGpsEmail.js
-                          (regex + normalización + hash)
-                                          │
-                                          ▼
-                                  PostgreSQL · gps_event
-                                          │
-                        ┌─────────────────┼─────────────────┐
-                        ▼                 ▼                 ▼
-                 vistas SQL          Power BI          FastAPI + RAG
-              (reglas de negocio)   (combustible,     (Ollama local)
-                        │            tiempo en ruta)         │
-                        └──────────> Bot de Telegram <───────┘
-                                          │
-                                    Tráfico decide
+```mermaid
+flowchart TB
+  GPS[Proveedor GPS] -->|alerta por correo| MAIL[Gmail / IMAP]
+  MAIL --> N8N[n8n · trigger IMAP]
+  N8N --> P["shared/parseGpsEmail.js<br/>regex + normalización + hash"]
+  P --> DB[(PostgreSQL · gps_event)]
+  DB --> V["Vistas SQL<br/>reglas de negocio"]
+  V --> BI[Power BI<br/>combustible y tiempo en ruta]
+  V --> API[FastAPI<br/>consultas operativas]
+  DB --> API
+  RAG[RAG + Ollama local] --> API
+  API --> TG[Bot de Telegram]
+  BI --> DEC[Tráfico decide]
+  TG --> DEC
 ```
 
 Cada pieza y su porqué está en [`docs/arquitectura.md`](docs/arquitectura.md).
