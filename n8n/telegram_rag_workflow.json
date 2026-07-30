@@ -1,4 +1,5 @@
 {
+  "id": "gpsTelegramFlota01",
   "name": "Telegram → Estatus de flota / RAG → Reply",
   "nodes": [
     {
@@ -7,7 +8,10 @@
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1,
-      "position": [-880, 0],
+      "position": [
+        -880,
+        0
+      ],
       "credentials": {
         "telegramApi": {
           "id": "__RELINK__",
@@ -20,11 +24,26 @@
         "keepOnlySet": true,
         "values": {
           "string": [
-            { "name": "chat_id", "value": "={{$json[\"message\"][\"chat\"][\"id\"]}}" },
-            { "name": "chat_type", "value": "={{$json[\"message\"][\"chat\"][\"type\"]}}" },
-            { "name": "username", "value": "={{$json[\"message\"][\"from\"][\"username\"] || ''}}" },
-            { "name": "first_name", "value": "={{$json[\"message\"][\"from\"][\"first_name\"] || ''}}" },
-            { "name": "text", "value": "={{$json[\"message\"][\"text\"] || ''}}" }
+            {
+              "name": "chat_id",
+              "value": "={{$json[\"message\"][\"chat\"][\"id\"]}}"
+            },
+            {
+              "name": "chat_type",
+              "value": "={{$json[\"message\"][\"chat\"][\"type\"]}}"
+            },
+            {
+              "name": "username",
+              "value": "={{$json[\"message\"][\"from\"][\"username\"] || ''}}"
+            },
+            {
+              "name": "first_name",
+              "value": "={{$json[\"message\"][\"from\"][\"first_name\"] || ''}}"
+            },
+            {
+              "name": "text",
+              "value": "={{$json[\"message\"][\"text\"] || ''}}"
+            }
           ]
         }
       },
@@ -32,7 +51,10 @@
       "name": "Set extract",
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
-      "position": [-680, 0]
+      "position": [
+        -680,
+        0
+      ]
     },
     {
       "parameters": {
@@ -50,7 +72,10 @@
       "name": "IF private",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [-480, 0]
+      "position": [
+        -480,
+        0
+      ]
     },
     {
       "parameters": {
@@ -60,7 +85,10 @@
       "name": "Rutear comando",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-280, 0]
+      "position": [
+        -280,
+        0
+      ]
     },
     {
       "parameters": {
@@ -76,7 +104,11 @@
               "id": "necesita-api",
               "leftValue": "={{ $json.question }}",
               "rightValue": "",
-              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -87,7 +119,10 @@
       "name": "IF necesita API",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [-60, 0]
+      "position": [
+        -60,
+        0
+      ]
     },
     {
       "parameters": {
@@ -96,13 +131,18 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"q\": {{ JSON.stringify($json.question) }},\n  \"top_k\": 4\n}",
-        "options": { "timeout": 120000 }
+        "options": {
+          "timeout": 120000
+        }
       },
       "id": "AskApi",
       "name": "API: /ask",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [180, -120]
+      "position": [
+        180,
+        -120
+      ]
     },
     {
       "parameters": {
@@ -112,7 +152,10 @@
       "name": "Partir respuesta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, -120]
+      "position": [
+        400,
+        -120
+      ]
     },
     {
       "parameters": {
@@ -122,7 +165,10 @@
       "name": "Respuesta directa",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [180, 140]
+      "position": [
+        180,
+        140
+      ]
     },
     {
       "parameters": {
@@ -134,7 +180,10 @@
       "name": "Telegram: Send",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [640, 0],
+      "position": [
+        640,
+        0
+      ],
       "credentials": {
         "telegramApi": {
           "id": "__RELINK__",
@@ -145,35 +194,103 @@
   ],
   "connections": {
     "Telegram Trigger": {
-      "main": [[{ "node": "Set extract", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Set extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Set extract": {
-      "main": [[{ "node": "IF private", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "IF private",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF private": {
       "main": [
-        [{ "node": "Rutear comando", "type": "main", "index": 0 }],
+        [
+          {
+            "node": "Rutear comando",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Rutear comando": {
-      "main": [[{ "node": "IF necesita API", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "IF necesita API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF necesita API": {
       "main": [
-        [{ "node": "API: /ask", "type": "main", "index": 0 }],
-        [{ "node": "Respuesta directa", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "API: /ask",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta directa",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "API: /ask": {
-      "main": [[{ "node": "Partir respuesta", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Partir respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Partir respuesta": {
-      "main": [[{ "node": "Telegram: Send", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Telegram: Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Respuesta directa": {
-      "main": [[{ "node": "Telegram: Send", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Telegram: Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

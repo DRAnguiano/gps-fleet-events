@@ -17,6 +17,7 @@ from .persona_config import SYSTEM_PROMPT
 from .settings import (
     REINDEX_API_KEY,
     INCLUDE_ERROR_DETAILS,
+    RAG_MIN_SCORE,
 )
 
 import os
@@ -271,7 +272,7 @@ def ask(body: AskBody):
             or max(
                 (c["score"] or 0)
                 for c in ctx
-            ) < 0.60
+            ) < RAG_MIN_SCORE
         ):
 
             # Mismo texto que el SYSTEM_PROMPT indica al modelo:

@@ -1,4 +1,5 @@
 {
+  "id": "gpsImapIngest0001",
   "name": "GPS: Ingesta IMAP → gps_event",
   "nodes": [
     {

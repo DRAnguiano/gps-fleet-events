@@ -108,6 +108,11 @@ Para recuperar un hueco, mueve en Gmail los correos del rango afectado a la carp
    curl http://localhost:8000/health
    ```
 
+   > Los scripts de `sql/` solo se ejecutan cuando el volumen de Postgres se crea por primera vez. Si borras el volumen, se aplican solos; si ya existe y cambiaste el SQL, hay que aplicarlo a mano:
+   > ```bash
+   > docker compose exec -T postgres psql -U gps -d gpsdb < sql/02_vistas_operativas.sql
+   > ```
+
 2. **Medir el hueco** — hasta dónde llegó la ingesta:
    ```sql
    SELECT MAX(event_time) AS ultimo_evento,

@@ -1,6 +1,15 @@
 # Workflows de n8n
 
-Importar desde `http://localhost:5678` → *Import from File*. Las credenciales viajan como referencias (`__RELINK__` o un id interno), **nunca con el token**: hay que reconectarlas a mano tras importar.
+Importar desde `http://localhost:5678` → *Import from File*, o por CLI:
+
+```bash
+docker compose cp n8n/imap_ingest_workflow.json n8n:/tmp/wf.json
+docker compose exec n8n n8n import:workflow --input=/tmp/wf.json
+```
+
+Las credenciales viajan como referencias (`__RELINK__` o un id interno), **nunca con el token**: hay que reconectarlas a mano tras importar.
+
+Cada archivo lleva un `id` fijo a nivel de workflow. Sin él, `n8n import:workflow` falla con *"null value in column id of relation workflow_entity"*; al ser fijo, reimportar actualiza el mismo workflow en vez de crear duplicados.
 
 | Archivo | Qué hace | Estado |
 |---|---|---|

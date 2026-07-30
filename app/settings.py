@@ -56,6 +56,19 @@ REPEAT_PENALTY = float(
 )
 
 # =========================
+# UMBRAL DEL RAG
+# =========================
+
+# Similitud mínima para que /ask conteste con los documentos en vez de decir
+# que no tiene el dato.
+#
+# El valor depende del modelo de embeddings y hay que recalibrarlo al
+# cambiarlo: con all-MiniLM-L6-v2 un acierto claro ronda 0.40-0.50 y el ruido
+# se queda en 0.20, así que el 0.60 que había antes descartaba incluso las
+# respuestas correctas. Compruébalo con POST /search, que devuelve los scores.
+RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.35"))
+
+# =========================
 # BASE OPERATIVA (gps_event)
 # =========================
 

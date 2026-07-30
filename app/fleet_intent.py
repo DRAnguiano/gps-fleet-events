@@ -106,6 +106,20 @@ def extract_unit(question: str) -> Optional[str]:
     return None
 
 
+# Palabras que delatan que la pregunta es sobre la flota y no sobre un
+# documento. "combustible" no basta: aparece igual en "¿qué incluye el bono de
+# rendimiento de combustible?", que es una consulta documental.
+_MARCADORES_FLOTA = (
+    "unidad", "unidades", "flota", "tracto", "camion", "remolque",
+    "operador", "viaje", "caseta", "patio",
+)
+
+
+def menciona_flota(question: str) -> bool:
+    q = _norm(question)
+    return any(m in q for m in _MARCADORES_FLOTA)
+
+
 def detect_intent(question: str) -> Optional[str]:
     q = _norm(question)
 
@@ -303,6 +317,14 @@ def try_answer(question: str) -> Optional[Dict[str, Any]]:
     # Estas tres necesitan una unidad concreta.
     if intent in ("STATUS", "FUEL", "EVENTS"):
         if not unidad_texto:
+            # Sin unidad, la pregunta puede no ser operativa en absoluto:
+            # "¿qué incluye el bono de rendimiento de combustible?" dispara
+            # FUEL por una palabra, pero se responde con los documentos. Solo
+            # se pide la unidad cuando algo más señala que se habla de flota;
+            # si no, se devuelve None y /ask sigue al RAG documental.
+            if not menciona_flota(question):
+                return None
+
             if intent == "STATUS":
                 # "¿qué unidades están libres?" también dispara STATUS.
                 intent = "AVAILABLE"

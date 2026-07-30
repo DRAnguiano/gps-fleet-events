@@ -28,6 +28,8 @@ Entonces: consultas fijas y parametrizadas, y el modelo no participa en el camin
 
 Si `detect_intent()` no reconoce nada, `/ask` sigue de largo al RAG documental. La capa operativa nunca secuestra una pregunta que no es suya.
 
+**Y hay una segunda salida, que costó una prueba en vivo descubrir.** Las intenciones que necesitan una unidad (`STATUS`, `FUEL`, `EVENTS`) se disparan por una sola palabra, así que *"¿qué incluye el bono de rendimiento de combustible?"* caía en `FUEL` y el bot pedía un número de unidad en vez de buscar en los documentos. Ahora, cuando falta la unidad, se exige además algún marcador de flota —"unidad", "operador", "viaje", "tracto", "caseta"…— y si no aparece, la consulta se devuelve al RAG.
+
 ### La intención se detecta con reglas
 
 Son siete formas de preguntar sobre una flota, no un problema de comprensión abierto. Unas reglas explícitas fallan de manera predecible y se arreglan agregando una palabra a una lista; un clasificador con LLM agrega latencia y falla de formas que nadie puede reproducir.
@@ -113,6 +115,7 @@ Responde `404` si la unidad no existe y `503` si la base operativa no está conf
 | `FLEET_TZ` | `America/Monterrey` | Zona en que se muestran las horas |
 | `FLEET_QUERY_TIMEOUT_S` | `5` | Corta consultas colgadas: el bot responde por Telegram y nadie espera |
 | `FLEET_STALE_HOURS` | `1` | A partir de cuántas horas sin reportar se advierte que el dato es viejo |
+| `RAG_MIN_SCORE` | `0.35` | Similitud mínima para contestar con documentos. Depende del modelo de embeddings: con `all-MiniLM-L6-v2` un acierto claro ronda 0.40-0.50 y el ruido se queda en 0.20. Compruébalo con `POST /search`, que devuelve los scores |
 
 En `docker-compose.yml`, el servicio `api` ya recibe `DATABASE_URL`.
 

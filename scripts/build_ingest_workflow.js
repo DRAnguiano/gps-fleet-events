@@ -212,6 +212,10 @@ const QUERY_REPLACEMENT = [
 ].join(', ');
 
 const workflow = {
+  // `n8n import:workflow` rechaza el archivo sin id ("null value in column
+  // id of relation workflow_entity"). Fijo, para que reimportar actualice el
+  // mismo workflow en vez de crear duplicados.
+  id: 'gpsImapIngest0001',
   name: 'GPS: Ingesta IMAP → gps_event',
   nodes: [
     {
