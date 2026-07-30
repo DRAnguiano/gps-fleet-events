@@ -193,9 +193,34 @@ Sistema en operación real. Pendientes:
 - [ ] Probar el workflow de ingesta reconstruido contra una instancia de n8n en vivo (el original se perdió con los volúmenes del servidor)
 - [ ] Detección de patrones por unidad y operador con modelos de ML
 
+## Resultados
+
+**Operativo.** Tráfico dejó de llamar a Monitoreo para saber si una unidad estaba libre: la respuesta llega en el chat, en el momento, con la hora del dato y una advertencia explícita cuando ese dato ya está viejo.
+
+**Técnico**, verificado levantando el stack completo:
+
+| | |
+|---|---|
+| Ingesta | Idempotente por `source_hash`: reprocesar el buzón entero no duplica un solo evento |
+| Continuidad | Dos capas — respaldo diario verificado, y reconstrucción total desde Gmail si se pierde la base |
+| Consultas | 7 intenciones operativas resueltas con SQL fijo; el LLM nunca genera SQL |
+| RAG | Modelo local en GPU (phi3:mini sobre RTX 4060), sin enviar datos de la empresa a terceros |
+| Degradación | Sin base operativa, el bot sigue respondiendo sobre documentos en vez de caerse |
+
+<!-- CAPTURA: conversación de Telegram con /disponibles y /estatus T-142 respondidos por el bot. -->
+<!-- CAPTURA: tablero de Power BI de combustible y tiempo en ruta sobre las vistas SQL. -->
+
+## Qué construí
+
+Todo el sistema: el parser de alertas y su esquema de idempotencia, el modelo de datos y las vistas que traducen eventos en decisiones operativas, los flujos de n8n, la API en FastAPI con la capa RAG, el router de consultas operativas, el bot de Telegram y los procedimientos de respaldo y recuperación.
+
+Lo que más define al proyecto no es el stack, sino dos decisiones: **tratar el buzón de correo como el API que no existía**, y **mantener las reglas de negocio en SQL** para que el bot, Power BI y las consultas manuales no puedan contradecirse.
+
 ## Autor
 
-**David Ramos** — Ingeniería en Datos e IA
+**David Ramos** — Data / AI Engineer
+
+[LinkedIn](https://www.linkedin.com/in/david-ramos-anguiano-3a647827a/) · david.24000@hotmail.com
 
 ## Licencia
 
